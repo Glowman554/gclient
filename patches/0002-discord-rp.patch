@@ -1,0 +1,536 @@
+From b04c0401602b5ecc71069e1e456e854e4d1178ab Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Wed, 3 Feb 2021 19:19:15 +0100
+Subject: [PATCH 2/2] discord rp
+
+---
+ main/java/net/minecraft/client/Minecraft.java | 177 ++++--------------
+ .../net/minecraft/client/gclient/Client.java  |  28 +++
+ .../client/gclient/discord/DiscordRP.java     |  59 ++++++
+ .../multiplayer/ServerDataFeatured.java       |  13 ++
+ .../client/gui/screen/ConnectingScreen.java   |   9 +-
+ .../client/gui/screen/MainMenuScreen.java     |  13 +-
+ .../client/gui/screen/MultiplayerScreen.java  |   4 +-
+ .../multiplayer/ServerDataFeatured.java       |   8 -
+ .../client/multiplayer/ServerList.java        |   1 +
+ 9 files changed, 155 insertions(+), 157 deletions(-)
+ create mode 100644 main/java/net/minecraft/client/gclient/Client.java
+ create mode 100644 main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+ create mode 100644 main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+ delete mode 100644 main/java/net/minecraft/client/multiplayer/ServerDataFeatured.java
+
+diff --git a/main/java/net/minecraft/client/Minecraft.java b/main/java/net/minecraft/client/Minecraft.java
+index e7f5db5..0e0816f 100644
+--- a/main/java/net/minecraft/client/Minecraft.java
++++ b/main/java/net/minecraft/client/Minecraft.java
+@@ -17,28 +17,6 @@ import com.mojang.datafixers.util.Function4;
+ import com.mojang.serialization.DataResult;
+ import com.mojang.serialization.JsonOps;
+ import com.mojang.serialization.Lifecycle;
+-import java.io.File;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.net.Proxy;
+-import java.net.SocketAddress;
+-import java.nio.ByteOrder;
+-import java.text.DecimalFormat;
+-import java.text.DecimalFormatSymbols;
+-import java.text.SimpleDateFormat;
+-import java.util.Collections;
+-import java.util.Date;
+-import java.util.List;
+-import java.util.Locale;
+-import java.util.Queue;
+-import java.util.UUID;
+-import java.util.concurrent.CompletableFuture;
+-import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.atomic.AtomicReference;
+-import java.util.function.Function;
+-import java.util.function.Supplier;
+-import java.util.stream.Stream;
+-import javax.annotation.Nullable;
+ import net.minecraft.block.Block;
+ import net.minecraft.block.BlockRenderType;
+ import net.minecraft.block.BlockState;
+@@ -47,33 +25,13 @@ import net.minecraft.client.audio.BackgroundMusicTracks;
+ import net.minecraft.client.audio.MusicTicker;
+ import net.minecraft.client.audio.SoundHandler;
+ import net.minecraft.client.entity.player.ClientPlayerEntity;
+-import net.minecraft.client.gui.DialogTexts;
+-import net.minecraft.client.gui.FontRenderer;
+-import net.minecraft.client.gui.IngameGui;
+-import net.minecraft.client.gui.LoadingGui;
+-import net.minecraft.client.gui.ResourceLoadProgressGui;
+-import net.minecraft.client.gui.ScreenManager;
++import net.minecraft.client.gclient.Client;
++import net.minecraft.client.gui.*;
+ import net.minecraft.client.gui.advancements.AdvancementsScreen;
+ import net.minecraft.client.gui.chat.NarratorChatListener;
+ import net.minecraft.client.gui.fonts.FontResourceManager;
+ import net.minecraft.client.gui.recipebook.RecipeList;
+-import net.minecraft.client.gui.screen.ChatScreen;
+-import net.minecraft.client.gui.screen.ConfirmBackupScreen;
+-import net.minecraft.client.gui.screen.ConfirmScreen;
+-import net.minecraft.client.gui.screen.ConnectingScreen;
+-import net.minecraft.client.gui.screen.DatapackFailureScreen;
+-import net.minecraft.client.gui.screen.DeathScreen;
+-import net.minecraft.client.gui.screen.DirtMessageScreen;
+-import net.minecraft.client.gui.screen.EditWorldScreen;
+-import net.minecraft.client.gui.screen.IngameMenuScreen;
+-import net.minecraft.client.gui.screen.MainMenuScreen;
+-import net.minecraft.client.gui.screen.MemoryErrorScreen;
+-import net.minecraft.client.gui.screen.MultiplayerScreen;
+-import net.minecraft.client.gui.screen.Screen;
+-import net.minecraft.client.gui.screen.SleepInMultiplayerScreen;
+-import net.minecraft.client.gui.screen.WinGameScreen;
+-import net.minecraft.client.gui.screen.WorkingScreen;
+-import net.minecraft.client.gui.screen.WorldLoadProgressScreen;
++import net.minecraft.client.gui.screen.*;
+ import net.minecraft.client.gui.screen.inventory.CreativeScreen;
+ import net.minecraft.client.gui.screen.inventory.InventoryScreen;
+ import net.minecraft.client.gui.toasts.SystemToast;
+@@ -83,20 +41,7 @@ import net.minecraft.client.multiplayer.ServerData;
+ import net.minecraft.client.network.login.ClientLoginNetHandler;
+ import net.minecraft.client.network.play.ClientPlayNetHandler;
+ import net.minecraft.client.particle.ParticleManager;
+-import net.minecraft.client.renderer.BlockModelShapes;
+-import net.minecraft.client.renderer.BlockRendererDispatcher;
+-import net.minecraft.client.renderer.BufferBuilder;
+-import net.minecraft.client.renderer.FirstPersonRenderer;
+-import net.minecraft.client.renderer.FogRenderer;
+-import net.minecraft.client.renderer.GPUWarning;
+-import net.minecraft.client.renderer.GameRenderer;
+-import net.minecraft.client.renderer.IWindowEventListener;
+-import net.minecraft.client.renderer.ItemRenderer;
+-import net.minecraft.client.renderer.RenderTypeBuffers;
+-import net.minecraft.client.renderer.ScreenSize;
+-import net.minecraft.client.renderer.Tessellator;
+-import net.minecraft.client.renderer.VirtualScreen;
+-import net.minecraft.client.renderer.WorldRenderer;
++import net.minecraft.client.renderer.*;
+ import net.minecraft.client.renderer.color.BlockColors;
+ import net.minecraft.client.renderer.color.ItemColors;
+ import net.minecraft.client.renderer.debug.DebugRenderer;
+@@ -109,28 +54,11 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+ import net.minecraft.client.renderer.texture.TextureManager;
+ import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
+ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+-import net.minecraft.client.resources.DownloadingPackFinder;
+-import net.minecraft.client.resources.FoliageColorReloadListener;
+-import net.minecraft.client.resources.GrassColorReloadListener;
+-import net.minecraft.client.resources.I18n;
+-import net.minecraft.client.resources.LanguageManager;
+-import net.minecraft.client.resources.LegacyResourcePackWrapper;
+-import net.minecraft.client.resources.LegacyResourcePackWrapperV4;
+-import net.minecraft.client.resources.SkinManager;
+-import net.minecraft.client.settings.AmbientOcclusionStatus;
+-import net.minecraft.client.settings.CloudOption;
+-import net.minecraft.client.settings.CreativeSettings;
+-import net.minecraft.client.settings.GraphicsFanciness;
+-import net.minecraft.client.settings.KeyBinding;
+-import net.minecraft.client.settings.PointOfView;
++import net.minecraft.client.resources.*;
++import net.minecraft.client.settings.*;
+ import net.minecraft.client.shader.Framebuffer;
+ import net.minecraft.client.tutorial.Tutorial;
+-import net.minecraft.client.util.IMutableSearchTree;
+-import net.minecraft.client.util.ITooltipFlag;
+-import net.minecraft.client.util.SearchTree;
+-import net.minecraft.client.util.SearchTreeManager;
+-import net.minecraft.client.util.SearchTreeReloadable;
+-import net.minecraft.client.util.Splashes;
++import net.minecraft.client.util.*;
+ import net.minecraft.client.world.ClientWorld;
+ import net.minecraft.command.Commands;
+ import net.minecraft.crash.CrashReport;
+@@ -138,51 +66,20 @@ import net.minecraft.crash.CrashReportCategory;
+ import net.minecraft.crash.ReportedException;
+ import net.minecraft.entity.Entity;
+ import net.minecraft.entity.EntityType;
+-import net.minecraft.entity.item.ArmorStandEntity;
+-import net.minecraft.entity.item.BoatEntity;
+-import net.minecraft.entity.item.EnderCrystalEntity;
+-import net.minecraft.entity.item.ItemFrameEntity;
+-import net.minecraft.entity.item.LeashKnotEntity;
+-import net.minecraft.entity.item.PaintingEntity;
++import net.minecraft.entity.item.*;
+ import net.minecraft.entity.item.minecart.AbstractMinecartEntity;
+ import net.minecraft.entity.player.ChatVisibility;
+ import net.minecraft.entity.player.PlayerEntity;
+ import net.minecraft.entity.player.PlayerInventory;
+-import net.minecraft.item.Item;
+-import net.minecraft.item.ItemGroup;
+-import net.minecraft.item.ItemStack;
+-import net.minecraft.item.Items;
+-import net.minecraft.item.SkullItem;
+-import net.minecraft.item.SpawnEggItem;
+-import net.minecraft.nbt.CompoundNBT;
+-import net.minecraft.nbt.INBT;
+-import net.minecraft.nbt.ListNBT;
+-import net.minecraft.nbt.NBTDynamicOps;
+-import net.minecraft.nbt.StringNBT;
++import net.minecraft.item.*;
++import net.minecraft.nbt.*;
+ import net.minecraft.network.NetworkManager;
+ import net.minecraft.network.ProtocolType;
+ import net.minecraft.network.handshake.client.CHandshakePacket;
+ import net.minecraft.network.login.client.CLoginStartPacket;
+ import net.minecraft.network.play.client.CPlayerDiggingPacket;
+-import net.minecraft.profiler.DataPoint;
+-import net.minecraft.profiler.EmptyProfiler;
+-import net.minecraft.profiler.IProfileResult;
+-import net.minecraft.profiler.IProfiler;
+-import net.minecraft.profiler.ISnooperInfo;
+-import net.minecraft.profiler.LongTickDetector;
+-import net.minecraft.profiler.Snooper;
+-import net.minecraft.profiler.TimeTracker;
+-import net.minecraft.resources.DataPackRegistries;
+-import net.minecraft.resources.FolderPackFinder;
+-import net.minecraft.resources.IPackNameDecorator;
+-import net.minecraft.resources.IReloadableResourceManager;
+-import net.minecraft.resources.IResourceManager;
+-import net.minecraft.resources.IResourcePack;
+-import net.minecraft.resources.ResourcePackInfo;
+-import net.minecraft.resources.ResourcePackList;
+-import net.minecraft.resources.ResourcePackType;
+-import net.minecraft.resources.ServerPackFinder;
+-import net.minecraft.resources.SimpleReloadableResourceManager;
++import net.minecraft.profiler.*;
++import net.minecraft.resources.*;
+ import net.minecraft.resources.data.PackMetadataSection;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.integrated.IntegratedServer;
+@@ -190,35 +87,14 @@ import net.minecraft.server.management.PlayerProfileCache;
+ import net.minecraft.tags.ItemTags;
+ import net.minecraft.tileentity.SkullTileEntity;
+ import net.minecraft.tileentity.TileEntity;
+-import net.minecraft.util.ActionResultType;
+-import net.minecraft.util.Direction;
+-import net.minecraft.util.FrameTimer;
+-import net.minecraft.util.Hand;
+-import net.minecraft.util.NonNullList;
+-import net.minecraft.util.ResourceLocation;
+-import net.minecraft.util.Session;
+-import net.minecraft.util.SharedConstants;
+ import net.minecraft.util.Timer;
+-import net.minecraft.util.Unit;
+-import net.minecraft.util.Util;
++import net.minecraft.util.*;
+ import net.minecraft.util.concurrent.RecursiveEventLoop;
+ import net.minecraft.util.datafix.DataFixesManager;
+ import net.minecraft.util.datafix.codec.DatapackCodec;
+-import net.minecraft.util.math.BlockPos;
+-import net.minecraft.util.math.BlockRayTraceResult;
+-import net.minecraft.util.math.EntityRayTraceResult;
+-import net.minecraft.util.math.MathHelper;
+-import net.minecraft.util.math.RayTraceResult;
+-import net.minecraft.util.registry.Bootstrap;
+-import net.minecraft.util.registry.DynamicRegistries;
+-import net.minecraft.util.registry.Registry;
+-import net.minecraft.util.registry.WorldGenSettingsExport;
+-import net.minecraft.util.registry.WorldSettingsImport;
+-import net.minecraft.util.text.ITextComponent;
+-import net.minecraft.util.text.KeybindTextComponent;
+-import net.minecraft.util.text.StringTextComponent;
+-import net.minecraft.util.text.TextFormatting;
+-import net.minecraft.util.text.TranslationTextComponent;
++import net.minecraft.util.math.*;
++import net.minecraft.util.registry.*;
++import net.minecraft.util.text.*;
+ import net.minecraft.world.World;
+ import net.minecraft.world.WorldSettings;
+ import net.minecraft.world.biome.Biome;
+@@ -234,6 +110,24 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
++import javax.annotation.Nullable;
++import java.io.File;
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.Proxy;
++import java.net.SocketAddress;
++import java.nio.ByteOrder;
++import java.text.DecimalFormat;
++import java.text.DecimalFormatSymbols;
++import java.text.SimpleDateFormat;
++import java.util.*;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.atomic.AtomicReference;
++import java.util.function.Function;
++import java.util.function.Supplier;
++import java.util.stream.Stream;
++
+ @OnlyIn(Dist.CLIENT)
+ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperInfo, IWindowEventListener {
+    private static Minecraft instance;
+@@ -357,6 +251,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+    public Minecraft(GameConfiguration gameConfig) {
+       super("Client");
+       instance = this;
++      Client.getInstance().init();
+       this.gameDir = gameConfig.folderInfo.gameDir;
+       File file1 = gameConfig.folderInfo.assetsDir;
+       this.fileResourcepacks = gameConfig.folderInfo.resourcePacksDir;
+@@ -834,6 +729,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+ 
+    public void shutdownMinecraftApplet() {
+       try {
++         Client.getInstance().shutdown();
+          LOGGER.info("Stopping!");
+ 
+          try {
+@@ -1699,6 +1595,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+          networkmanager.sendPacket(new CHandshakePacket(socketaddress.toString(), 0, ProtocolType.LOGIN));
+          networkmanager.sendPacket(new CLoginStartPacket(this.getSession().getProfile()));
+          this.networkManager = networkmanager;
++         Client.getInstance().getDiscordRP().update("Playing Singleplayer", "In Game");
+       } else {
+          this.func_241559_a_(p_238195_6_, p_238195_1_, flag, () -> {
+             this.func_238195_a_(p_238195_1_, p_238195_2_, p_238195_3_, p_238195_4_, p_238195_5_, Minecraft.WorldSelectionType.NONE);
+diff --git a/main/java/net/minecraft/client/gclient/Client.java b/main/java/net/minecraft/client/gclient/Client.java
+new file mode 100644
+index 0000000..ac02ec8
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/Client.java
+@@ -0,0 +1,28 @@
++package net.minecraft.client.gclient;
++
++import net.minecraft.client.gclient.discord.DiscordRP;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class Client {
++    private static final Client instance = new Client();
++
++    private DiscordRP discordRP = new DiscordRP();
++
++    public static final Client getInstance() {
++        return instance;
++    }
++
++    public DiscordRP getDiscordRP() {
++        return discordRP;
++    }
++
++    public void init() {
++        discordRP.start();
++    }
++
++    public void shutdown() {
++        discordRP.shutdown();
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/discord/DiscordRP.java b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+new file mode 100644
+index 0000000..9e2e083
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+@@ -0,0 +1,59 @@
++package net.minecraft.client.gclient.discord;
++
++import net.arikia.dev.drpc.DiscordEventHandlers;
++import net.arikia.dev.drpc.DiscordRPC;
++import net.arikia.dev.drpc.DiscordRichPresence;
++import net.arikia.dev.drpc.DiscordUser;
++import net.arikia.dev.drpc.callbacks.ReadyCallback;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++@OnlyIn(Dist.CLIENT)
++public class DiscordRP {
++    private static final Logger LOGGER = LogManager.getLogger();
++    private boolean running = true;
++    private long created = 0;
++    private final String client_id = "806549146453409852";
++
++    public void start() {
++        this.created = System.currentTimeMillis();
++
++        DiscordEventHandlers handlers = new DiscordEventHandlers.Builder().setReadyEventHandler(new ReadyCallback() {
++            @Override
++            public void apply(DiscordUser discordUser) {
++                LOGGER.info("Websome " + discordUser.username + "#" + discordUser.discriminator);
++                update("Starting...", "");
++            }
++        }).build();
++
++        DiscordRPC.discordInitialize(client_id, handlers, true);
++
++        new Thread("Discord RPC Callback") {
++            @Override
++            public void run() {
++                while (running) {
++                    DiscordRPC.discordRunCallbacks();
++                }
++            }
++        }.start();
++
++    }
++
++    public void shutdown() {
++        running = false;
++        DiscordRPC.discordShutdown();
++    }
++
++    public void update(String firstLine, String secondLine) {
++        DiscordRichPresence.Builder rich = new DiscordRichPresence.Builder(secondLine);
++        rich.setBigImage("large", "");
++        rich.setDetails(firstLine);
++        rich.setStartTimestamps(created);
++
++        DiscordRPC.discordUpdatePresence(rich.build());
++
++    }
++
++}
+diff --git a/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java b/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+new file mode 100644
+index 0000000..ca5e72d
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+@@ -0,0 +1,13 @@
++package net.minecraft.client.gclient.multiplayer;
++
++import net.minecraft.client.multiplayer.ServerData;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ServerDataFeatured extends ServerData {
++
++    public ServerDataFeatured(String name, String ip) {
++        super(name, ip, false);
++    }
++}
+diff --git a/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java b/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
+index d917d96..233feb5 100644
+--- a/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
+@@ -1,10 +1,8 @@
+ package net.minecraft.client.gui.screen;
+ 
+ import com.mojang.blaze3d.matrix.MatrixStack;
+-import java.net.InetAddress;
+-import java.net.UnknownHostException;
+-import java.util.concurrent.atomic.AtomicInteger;
+ import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.Client;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.chat.NarratorChatListener;
+ import net.minecraft.client.gui.widget.button.Button;
+@@ -24,6 +22,10 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
++import java.net.InetAddress;
++import java.net.UnknownHostException;
++import java.util.concurrent.atomic.AtomicInteger;
++
+ @OnlyIn(Dist.CLIENT)
+ public class ConnectingScreen extends Screen {
+    private static final AtomicInteger CONNECTION_ID = new AtomicInteger(0);
+@@ -70,6 +72,7 @@ public class ConnectingScreen extends Screen {
+                }));
+                ConnectingScreen.this.networkManager.sendPacket(new CHandshakePacket(ip, port, ProtocolType.LOGIN));
+                ConnectingScreen.this.networkManager.sendPacket(new CLoginStartPacket(ConnectingScreen.this.field_230706_i_.getSession().getProfile()));
++               Client.getInstance().getDiscordRP().update("Playing " + ip + (port != 25565 ? ":" + port : ""), "In Game");
+             } catch (UnknownHostException unknownhostexception) {
+                if (ConnectingScreen.this.cancel) {
+                   return;
+diff --git a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+index d2010eb..f02236b 100644
+--- a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+@@ -4,11 +4,7 @@ import com.google.common.util.concurrent.Runnables;
+ import com.mojang.blaze3d.matrix.MatrixStack;
+ import com.mojang.blaze3d.platform.GlStateManager;
+ import com.mojang.blaze3d.systems.RenderSystem;
+-import java.io.IOException;
+-import java.util.Random;
+-import java.util.concurrent.CompletableFuture;
+-import java.util.concurrent.Executor;
+-import javax.annotation.Nullable;
++import net.minecraft.client.gclient.Client;
+ import net.minecraft.client.gui.AccessibilityScreen;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.toasts.SystemToast;
+@@ -35,6 +31,12 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
++import javax.annotation.Nullable;
++import java.io.IOException;
++import java.util.Random;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.Executor;
++
+ @OnlyIn(Dist.CLIENT)
+ public class MainMenuScreen extends Screen {
+    private static final Logger field_238656_b_ = LogManager.getLogger();
+@@ -89,6 +91,7 @@ public class MainMenuScreen extends Screen {
+    }
+ 
+    protected void func_231160_c_() {
++      Client.getInstance().getDiscordRP().update("Idle", "Main Menu");
+       if (this.splashText == null) {
+          this.splashText = this.field_230706_i_.getSplashes().getSplashText();
+       }
+diff --git a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+index 0ee0d97..b4afed1 100644
+--- a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+@@ -1,10 +1,11 @@
+ package net.minecraft.client.gui.screen;
+ 
+ import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.gclient.Client;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.widget.button.Button;
+ import net.minecraft.client.multiplayer.ServerData;
+-import net.minecraft.client.multiplayer.ServerDataFeatured;
++import net.minecraft.client.gclient.multiplayer.ServerDataFeatured;
+ import net.minecraft.client.multiplayer.ServerList;
+ import net.minecraft.client.network.LanServerDetector;
+ import net.minecraft.client.network.LanServerInfo;
+@@ -42,6 +43,7 @@ public class MultiplayerScreen extends Screen {
+ 
+    protected void func_231160_c_() {
+       super.func_231160_c_();
++      Client.getInstance().getDiscordRP().update("Idle", "Multiplayer Menu");
+       this.field_230706_i_.keyboardListener.enableRepeatEvents(true);
+       if (this.initialized) {
+          this.serverListSelector.func_230940_a_(this.field_230708_k_, this.field_230709_l_, 32, this.field_230709_l_ - 64);
+diff --git a/main/java/net/minecraft/client/multiplayer/ServerDataFeatured.java b/main/java/net/minecraft/client/multiplayer/ServerDataFeatured.java
+deleted file mode 100644
+index 26b3b95..0000000
+--- a/main/java/net/minecraft/client/multiplayer/ServerDataFeatured.java
++++ /dev/null
+@@ -1,8 +0,0 @@
+-package net.minecraft.client.multiplayer;
+-
+-public class ServerDataFeatured extends ServerData {
+-
+-    public ServerDataFeatured(String name, String ip) {
+-        super(name, ip, false);
+-    }
+-}
+diff --git a/main/java/net/minecraft/client/multiplayer/ServerList.java b/main/java/net/minecraft/client/multiplayer/ServerList.java
+index 3cd3c86..a6d661b 100644
+--- a/main/java/net/minecraft/client/multiplayer/ServerList.java
++++ b/main/java/net/minecraft/client/multiplayer/ServerList.java
+@@ -2,6 +2,7 @@ package net.minecraft.client.multiplayer;
+ 
+ import com.google.common.collect.Lists;
+ import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.multiplayer.ServerDataFeatured;
+ import net.minecraft.nbt.CompoundNBT;
+ import net.minecraft.nbt.CompressedStreamTools;
+ import net.minecraft.nbt.ListNBT;
+-- 
+2.24.1.windows.2
+
