@@ -1,8 +1,9 @@
 @echo off
 mkdir tmp
 
-curl https://launcher.mojang.com/v1/objects/1321521b2caf934f7fc9665aab7e059a7b2bfcdf/client.jar -o 1.16.3.jar
 cd tmp
+
+curl https://launcher.mojang.com/v1/objects/1321521b2caf934f7fc9665aab7e059a7b2bfcdf/client.jar -o 1.16.3.jar
 
 mkdir orig
 cd orig
