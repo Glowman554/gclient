@@ -21,13 +21,13 @@ jobs:
       with:
         java-version: 1.8
     - name: Setup
-      run: gradlew.bat setup
+      run: .\gradlew.bat setup
     - name: Patch
-      run: patch.bat
+      run: .\patch.bat
     - name: Build
-      run: gradlew.bat build
+      run: .\gradlew.bat build
     - name: Inject
-      run: inject-textures.bat
+      run: .\inject-textures.bat
     - uses: marvinpinto/action-automatic-releases@latest
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
