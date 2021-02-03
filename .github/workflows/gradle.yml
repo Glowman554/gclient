@@ -20,6 +20,10 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
+    - name: Git setup
+      run: |
+            git config --global user.email "vossjanick@gmail.com"
+            git config --global user.name "Glowman554"
     - name: Setup
       run: .\gradlew.bat setup
     - name: Patch
