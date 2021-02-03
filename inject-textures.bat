@@ -1,7 +1,7 @@
 @echo off
 mkdir tmp
 
-copy %appdata%\.minecraft\versions\1.16.3\1.16.3.jar tmp\1.16.3.jar
+curl https://launcher.mojang.com/v1/objects/1321521b2caf934f7fc9665aab7e059a7b2bfcdf/client.jar -o 1.16.3.jar
 cd tmp
 
 mkdir orig
