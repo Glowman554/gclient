@@ -33,10 +33,12 @@ jobs:
       run: .\gradlew.bat build
     - name: Inject
       run: .\inject-textures.bat
+    - name: Pack
+      run: .\pack.bat
     - uses: marvinpinto/action-automatic-releases@latest
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         automatic_release_tag: "latest"
         prerelease: false
         title: "Development Build"
-        files: build/libs/mcp-reborn-1.0.0.jar
+        files: tmp/gclient-1.16.3.zip
