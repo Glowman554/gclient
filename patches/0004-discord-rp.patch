@@ -1,0 +1,211 @@
+From eb870d479c721391e2e55e5d1948a8ab0c86f9c5 Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Thu, 4 Feb 2021 09:29:00 +0100
+Subject: [PATCH 4/4] discord rp
+
+---
+ main/java/net/minecraft/client/Minecraft.java |  4 ++
+ .../net/minecraft/client/gclient/GClient.java | 27 +++++++++
+ .../client/gclient/discord/DiscordRP.java     | 56 +++++++++++++++++++
+ .../client/gui/screen/ConnectingScreen.java   |  2 +
+ .../client/gui/screen/MainMenuScreen.java     |  3 +
+ .../client/gui/screen/MultiplayerScreen.java  |  2 +
+ 6 files changed, 94 insertions(+)
+ create mode 100644 main/java/net/minecraft/client/gclient/GClient.java
+ create mode 100644 main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+
+diff --git a/main/java/net/minecraft/client/Minecraft.java b/main/java/net/minecraft/client/Minecraft.java
+index 82dc483..5f91ac8 100644
+--- a/main/java/net/minecraft/client/Minecraft.java
++++ b/main/java/net/minecraft/client/Minecraft.java
+@@ -47,6 +47,7 @@ import net.minecraft.client.audio.BackgroundMusicTracks;
+ import net.minecraft.client.audio.MusicTicker;
+ import net.minecraft.client.audio.SoundHandler;
+ import net.minecraft.client.entity.player.ClientPlayerEntity;
++import net.minecraft.client.gclient.GClient;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.FontRenderer;
+ import net.minecraft.client.gui.IngameGui;
+@@ -357,6 +358,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+     {
+         super("Client");
+         instance = this;
++        GClient.getInstance().init();
+         this.gameDir = gameConfig.folderInfo.gameDir;
+         File file1 = gameConfig.folderInfo.assetsDir;
+         this.fileResourcepacks = gameConfig.folderInfo.resourcePacksDir;
+@@ -958,6 +960,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+     {
+         try
+         {
++            GClient.getInstance().shutdown();
+             LOGGER.info("Stopping!");
+ 
+             try
+@@ -2092,6 +2095,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+             networkmanager.sendPacket(new CHandshakePacket(socketaddress.toString(), 0, ProtocolType.LOGIN));
+             networkmanager.sendPacket(new CLoginStartPacket(this.getSession().getProfile()));
+             this.networkManager = networkmanager;
++            GClient.getInstance().getDiscordRP().update("Playing Singleplayer", "In Game");
+         }
+         else
+         {
+diff --git a/main/java/net/minecraft/client/gclient/GClient.java b/main/java/net/minecraft/client/gclient/GClient.java
+new file mode 100644
+index 0000000..f94ed30
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/GClient.java
+@@ -0,0 +1,27 @@
++package net.minecraft.client.gclient;
++
++import net.minecraft.client.gclient.discord.DiscordRP;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class GClient {
++    private static final GClient instance = new GClient();
++    private DiscordRP discordRP = new DiscordRP();
++
++    public static final GClient getInstance() {
++        return instance;
++    }
++
++    public DiscordRP getDiscordRP() {
++        return discordRP;
++    }
++
++    public void init() {
++        discordRP.start();
++    }
++
++    public void shutdown() {
++        discordRP.shutdown();
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/discord/DiscordRP.java b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+new file mode 100644
+index 0000000..5752405
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+@@ -0,0 +1,56 @@
++package net.minecraft.client.gclient.discord;
++
++import net.arikia.dev.drpc.DiscordEventHandlers;
++import net.arikia.dev.drpc.DiscordRPC;
++import net.arikia.dev.drpc.DiscordRichPresence;
++import net.arikia.dev.drpc.DiscordUser;
++import net.arikia.dev.drpc.callbacks.ReadyCallback;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++
++@OnlyIn(Dist.CLIENT)
++public class DiscordRP {
++    private static final Logger LOGGER = LogManager.getLogger();
++    private boolean running = true;
++    private long created = 0;
++    private final String client_id = "806549146453409852";
++
++    public void start() {
++        this.created = System.currentTimeMillis();
++
++        DiscordEventHandlers handlers = new DiscordEventHandlers.Builder().setReadyEventHandler(new ReadyCallback() {
++            @Override
++            public void apply(DiscordUser discordUser) {
++                LOGGER.info("Websome " + discordUser.username + "#" + discordUser.discriminator);
++                update("Starting...", "");
++            }
++        }).build();
++
++        DiscordRPC.discordInitialize(client_id, handlers, true);
++
++        new Thread("Discord RP Callback") {
++            @Override
++            public void run() {
++                while (running) {
++                    DiscordRPC.discordRunCallbacks();
++                }
++            }
++        }.start();
++    }
++
++    public void shutdown() {
++        running = false;
++        DiscordRPC.discordShutdown();
++    }
++
++    public void update(String firstLine, String secondLine) {
++        DiscordRichPresence.Builder rich = new DiscordRichPresence.Builder(secondLine);
++        rich.setBigImage("large", "");
++        rich.setDetails(firstLine);
++        rich.setStartTimestamps(created);
++        DiscordRPC.discordUpdatePresence(rich.build());
++    }
++}
+diff --git a/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java b/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
+index 7657e5d..8f616a1 100644
+--- a/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/ConnectingScreen.java
+@@ -5,6 +5,7 @@ import java.net.InetAddress;
+ import java.net.UnknownHostException;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.GClient;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.chat.NarratorChatListener;
+ import net.minecraft.client.gui.widget.button.Button;
+@@ -76,6 +77,7 @@ public class ConnectingScreen extends Screen
+                     }));
+                     ConnectingScreen.this.networkManager.sendPacket(new CHandshakePacket(ip, port, ProtocolType.LOGIN));
+                     ConnectingScreen.this.networkManager.sendPacket(new CLoginStartPacket(ConnectingScreen.this.minecraft.getSession().getProfile()));
++                    GClient.getInstance().getDiscordRP().update("Playing " + ip + (port != 25565 ? ":" + port : ""), "In Game");
+                 }
+                 catch (UnknownHostException unknownhostexception)
+                 {
+diff --git a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+index cbdf54b..3584bec 100644
+--- a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+@@ -10,6 +10,8 @@ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.Executor;
+ import java.util.function.BiConsumer;
+ import javax.annotation.Nullable;
++
++import net.minecraft.client.gclient.GClient;
+ import net.minecraft.client.gui.AccessibilityScreen;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.toasts.SystemToast;
+@@ -99,6 +101,7 @@ public class MainMenuScreen extends Screen
+ 
+     protected void init()
+     {
++        GClient.getInstance().getDiscordRP().update("Idle", "Main Menu");
+         if (this.splashText == null)
+         {
+             this.splashText = this.minecraft.getSplashes().getSplashText();
+diff --git a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+index ec5aed3..32d1e28 100644
+--- a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+@@ -3,6 +3,7 @@ package net.minecraft.client.gui.screen;
+ import com.mojang.blaze3d.matrix.MatrixStack;
+ import java.util.List;
+ 
++import net.minecraft.client.gclient.GClient;
+ import net.minecraft.client.gclient.multiplayer.ServerDataFeatured;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.widget.button.Button;
+@@ -42,6 +43,7 @@ public class MultiplayerScreen extends Screen
+     protected void init()
+     {
+         super.init();
++        GClient.getInstance().getDiscordRP().update("Idle", "Multiplayer Menu");
+         this.minecraft.keyboardListener.enableRepeatEvents(true);
+ 
+         if (this.initialized)
+-- 
+2.24.1.windows.2
+

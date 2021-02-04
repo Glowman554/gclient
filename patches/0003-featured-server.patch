@@ -1,0 +1,185 @@
+From 58d8945b75df5f34fbdc7bcefd26589a1162e8ee Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Thu, 4 Feb 2021 08:53:00 +0100
+Subject: [PATCH 3/4] featured server
+
+---
+ .../multiplayer/ServerDataFeatured.java       | 12 +++++
+ .../client/gui/screen/MultiplayerScreen.java  | 11 ++++
+ .../gui/screen/ServerSelectionList.java       | 52 +++++++++----------
+ .../client/multiplayer/ServerList.java        | 10 +++-
+ 4 files changed, 56 insertions(+), 29 deletions(-)
+ create mode 100644 main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+
+diff --git a/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java b/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+new file mode 100644
+index 0000000..e3f48a7
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/multiplayer/ServerDataFeatured.java
+@@ -0,0 +1,12 @@
++package net.minecraft.client.gclient.multiplayer;
++
++import net.minecraft.client.multiplayer.ServerData;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ServerDataFeatured extends ServerData {
++    public ServerDataFeatured(String name, String ip) {
++        super(name, ip, false);
++    }
++}
+diff --git a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+index d08b5b1..ec5aed3 100644
+--- a/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MultiplayerScreen.java
+@@ -2,6 +2,8 @@ package net.minecraft.client.gui.screen;
+ 
+ import com.mojang.blaze3d.matrix.MatrixStack;
+ import java.util.List;
++
++import net.minecraft.client.gclient.multiplayer.ServerDataFeatured;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.widget.button.Button;
+ import net.minecraft.client.multiplayer.ServerData;
+@@ -296,6 +298,15 @@ public class MultiplayerScreen extends Screen
+             {
+                 this.btnEditServer.active = true;
+                 this.btnDeleteServer.active = true;
++
++                ServerSelectionList.NormalEntry entry = (ServerSelectionList.NormalEntry) serverselectionlist$entry;
++
++                if(entry.getServerData() instanceof ServerDataFeatured) {
++                    this.btnEditServer.active = false;
++                    this.btnDeleteServer.active = false;
++
++                    entry.isFeaturedServer = true;
++                }
+             }
+         }
+     }
+diff --git a/main/java/net/minecraft/client/gui/screen/ServerSelectionList.java b/main/java/net/minecraft/client/gui/screen/ServerSelectionList.java
+index 22ac911..2b0b506 100644
+--- a/main/java/net/minecraft/client/gui/screen/ServerSelectionList.java
++++ b/main/java/net/minecraft/client/gui/screen/ServerSelectionList.java
+@@ -225,6 +225,7 @@ public class ServerSelectionList extends ExtendedList<ServerSelectionList.Entry>
+         private String lastIconB64;
+         private DynamicTexture icon;
+         private long lastClickTime;
++        public boolean isFeaturedServer = false;
+ 
+         protected NormalEntry(MultiplayerScreen p_i50669_2_, ServerData p_i50669_3_)
+         {
+@@ -399,27 +400,22 @@ public class ServerSelectionList extends ExtendedList<ServerSelectionList.Entry>
+                     }
+                 }
+ 
+-                if (p_230432_2_ > 0)
+-                {
+-                    if (k1 < 16 && l1 < 16)
+-                    {
+-                        AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 96.0F, 32.0F, 32, 32, 256, 256);
+-                    }
+-                    else
+-                    {
+-                        AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 96.0F, 0.0F, 32, 32, 256, 256);
+-                    }
+-                }
++                if(!isFeaturedServer) {
+ 
+-                if (p_230432_2_ < this.owner.getServerList().countServers() - 1)
+-                {
+-                    if (k1 < 16 && l1 > 16)
+-                    {
+-                        AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 64.0F, 32.0F, 32, 32, 256, 256);
++                    if (p_230432_2_ > 0) {
++                        if (k1 < 16 && l1 < 16) {
++                            AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 96.0F, 32.0F, 32, 32, 256, 256);
++                        } else {
++                            AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 96.0F, 0.0F, 32, 32, 256, 256);
++                        }
+                     }
+-                    else
+-                    {
+-                        AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 64.0F, 0.0F, 32, 32, 256, 256);
++
++                    if (p_230432_2_ < this.owner.getServerList().countServers() - 1) {
++                        if (k1 < 16 && l1 > 16) {
++                            AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 64.0F, 32.0F, 32, 32, 256, 256);
++                        } else {
++                            AbstractGui.blit(p_230432_1_, p_230432_4_, p_230432_3_, 64.0F, 0.0F, 32, 32, 256, 256);
++                        }
+                     }
+                 }
+             }
+@@ -528,16 +524,16 @@ public class ServerSelectionList extends ExtendedList<ServerSelectionList.Entry>
+ 
+                 int i = this.owner.serverListSelector.getEventListeners().indexOf(this);
+ 
+-                if (d0 < 16.0D && d1 < 16.0D && i > 0)
+-                {
+-                    this.func_228196_a_(i, i - 1);
+-                    return true;
+-                }
++                if(!isFeaturedServer) {
++                    if (d0 < 16.0D && d1 < 16.0D && i > 0) {
++                        this.func_228196_a_(i, i - 1);
++                        return true;
++                    }
+ 
+-                if (d0 < 16.0D && d1 > 16.0D && i < this.owner.getServerList().countServers() - 1)
+-                {
+-                    this.func_228196_a_(i, i + 1);
+-                    return true;
++                    if (d0 < 16.0D && d1 > 16.0D && i < this.owner.getServerList().countServers() - 1) {
++                        this.func_228196_a_(i, i + 1);
++                        return true;
++                    }
+                 }
+             }
+ 
+diff --git a/main/java/net/minecraft/client/multiplayer/ServerList.java b/main/java/net/minecraft/client/multiplayer/ServerList.java
+index c3e0545..92c16b3 100644
+--- a/main/java/net/minecraft/client/multiplayer/ServerList.java
++++ b/main/java/net/minecraft/client/multiplayer/ServerList.java
+@@ -4,6 +4,7 @@ import com.google.common.collect.Lists;
+ import java.io.File;
+ import java.util.List;
+ import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.multiplayer.ServerDataFeatured;
+ import net.minecraft.nbt.CompoundNBT;
+ import net.minecraft.nbt.CompressedStreamTools;
+ import net.minecraft.nbt.ListNBT;
+@@ -28,6 +29,7 @@ public class ServerList
+         try
+         {
+             this.servers.clear();
++            loadFeaturedServers();
+             CompoundNBT compoundnbt = CompressedStreamTools.read(new File(this.mc.gameDir, "servers.dat"));
+ 
+             if (compoundnbt == null)
+@@ -48,6 +50,10 @@ public class ServerList
+         }
+     }
+ 
++    private void loadFeaturedServers() {
++        this.addServerData(new ServerDataFeatured("BeyondDark", "beyonddark.de"));
++    }
++
+     public void saveServerList()
+     {
+         try
+@@ -56,7 +62,9 @@ public class ServerList
+ 
+             for (ServerData serverdata : this.servers)
+             {
+-                listnbt.add(serverdata.getNBTCompound());
++                if(!(serverdata instanceof ServerDataFeatured)) {
++                    listnbt.add(serverdata.getNBTCompound());
++                }
+             }
+ 
+             CompoundNBT compoundnbt = new CompoundNBT();
+-- 
+2.24.1.windows.2
+
