@@ -1,0 +1,218 @@
+From 2d7caadba4b055d6848bfb1394db281123777d85 Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Fri, 5 Feb 2021 14:31:22 +0100
+Subject: [PATCH 7/7] filemanager
+
+---
+ .../net/minecraft/client/gclient/GClient.java |  2 +
+ .../client/gclient/file/FileManager.java      | 76 +++++++++++++++++++
+ .../client/gclient/hud/ScreenPosition.java    |  2 +
+ .../client/gclient/mod/ModDraggable.java      | 39 ++++++++++
+ .../gclient/mod/impl/ModHelloWorld.java       | 12 ---
+ 5 files changed, 119 insertions(+), 12 deletions(-)
+ create mode 100644 main/java/net/minecraft/client/gclient/file/FileManager.java
+
+diff --git a/main/java/net/minecraft/client/gclient/GClient.java b/main/java/net/minecraft/client/gclient/GClient.java
+index bf68eae..ffb3dc8 100644
+--- a/main/java/net/minecraft/client/gclient/GClient.java
++++ b/main/java/net/minecraft/client/gclient/GClient.java
+@@ -5,6 +5,7 @@ import net.minecraft.client.gclient.discord.DiscordRP;
+ import net.minecraft.client.gclient.event.EventManager;
+ import net.minecraft.client.gclient.event.EventTarget;
+ import net.minecraft.client.gclient.event.impl.ClientTickEvent;
++import net.minecraft.client.gclient.file.FileManager;
+ import net.minecraft.client.gclient.hud.HUDManager;
+ import net.minecraft.client.gclient.mod.ModInstances;
+ import net.minecraftforge.api.distmarker.Dist;
+@@ -25,6 +26,7 @@ public class GClient {
+     }
+ 
+     public void init() {
++        FileManager.init();
+         discordRP.start();
+         EventManager.register(this);
+     }
+diff --git a/main/java/net/minecraft/client/gclient/file/FileManager.java b/main/java/net/minecraft/client/gclient/file/FileManager.java
+new file mode 100644
+index 0000000..4a728fe
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/file/FileManager.java
+@@ -0,0 +1,76 @@
++package net.minecraft.client.gclient.file;
++
++import com.google.gson.Gson;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.io.*;
++
++@OnlyIn(Dist.CLIENT)
++public class FileManager {
++
++    private static Gson gson = new Gson();
++
++    private static File ROOT_DIR = new File("gclient");
++    private static File MODS_DIR = new File(ROOT_DIR, "mods");
++
++    public static void init() {
++        if(!ROOT_DIR.exists()) {
++            ROOT_DIR.mkdir();
++        }
++
++        if(!MODS_DIR.exists()) {
++            MODS_DIR.mkdir();
++        }
++    }
++
++    public static Gson getGson() {
++        return gson;
++    }
++
++    public static File getModsDir() {
++        return MODS_DIR;
++    }
++
++    public static boolean writeJsonToFile(File file, Object object) {
++        try {
++            if (!file.exists()) {
++                file.createNewFile();
++            }
++
++            FileOutputStream fileOutputStream = new FileOutputStream(file);
++            fileOutputStream.write(gson.toJson(object).getBytes());
++            fileOutputStream.flush();
++            fileOutputStream.close();
++            return true;
++        } catch (Exception e) {
++            e.printStackTrace();
++            return false;
++        }
++    }
++
++    public static <T extends Object> T readFromJsonFile(File file, Class<T> c) {
++        try {
++            FileInputStream fileInputStream = new FileInputStream(file);
++            InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
++            BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
++
++            StringBuilder stringBuilder = new StringBuilder();
++
++            String line;
++
++            while ((line = bufferedReader.readLine()) != null) {
++                stringBuilder.append(line);
++            }
++
++            bufferedReader.close();
++            inputStreamReader.close();
++            fileInputStream.close();
++
++            return gson.fromJson(stringBuilder.toString(), c);
++        } catch (Exception e) {
++            e.printStackTrace();
++            return null;
++        }
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java b/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
+index 215ce62..cc656c5 100644
+--- a/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
++++ b/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.client.gclient.hud;
+ 
++import com.google.gson.annotations.Expose;
+ import net.minecraft.client.Minecraft;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+@@ -7,6 +8,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ @OnlyIn(Dist.CLIENT)
+ public class ScreenPosition {
+ 
++    @Expose(serialize = false)
+     private static final Minecraft mc = Minecraft.getInstance();
+ 
+     private double x, y;
+diff --git a/main/java/net/minecraft/client/gclient/mod/ModDraggable.java b/main/java/net/minecraft/client/gclient/mod/ModDraggable.java
+index 1473dd7..c51d7e0 100644
+--- a/main/java/net/minecraft/client/gclient/mod/ModDraggable.java
++++ b/main/java/net/minecraft/client/gclient/mod/ModDraggable.java
+@@ -1,13 +1,52 @@
+ package net.minecraft.client.gclient.mod;
+ 
++import net.minecraft.client.gclient.file.FileManager;
+ import net.minecraft.client.gclient.hud.IRenderer;
+ import net.minecraft.client.gclient.hud.ScreenPosition;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ 
++import java.io.File;
++
+ @OnlyIn(Dist.CLIENT)
+ public abstract class ModDraggable extends Mod implements IRenderer {
+ 
++    protected ScreenPosition pos;
++
++    public ModDraggable() {
++        this.pos = loadFromJsonFile();
++    }
++
++    @Override
++    public void save(ScreenPosition pos) {
++        this.pos = pos;
++        savePositionToJsonFile(pos);
++    }
++
++    private File getFolder() {
++        File folder = new File(FileManager.getModsDir(), this.getClass().getSimpleName());
++        folder.mkdirs();
++        return folder;
++    }
++
++    private ScreenPosition loadFromJsonFile() {
++        ScreenPosition loaded = FileManager.readFromJsonFile(new File(getFolder(), "pos.json"), ScreenPosition.class);
++        if(loaded == null) {
++            loaded = ScreenPosition.fromAbsolutePosition(10, 10);
++            savePositionToJsonFile(loaded);
++        }
++        return loaded;
++    }
++
++    private void savePositionToJsonFile(ScreenPosition pos) {
++        FileManager.writeJsonToFile(new File(getFolder(), "pos.json"), pos);
++    }
++
++    @Override
++    public ScreenPosition load() {
++        return this.pos;
++    }
++
+     public final int getLineOffset(ScreenPosition pos, int lineNum) {
+         return pos.getAbsoluteY() + getLineOffset(lineNum);
+     }
+diff --git a/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java b/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
+index fbd6d1f..08fa4b0 100644
+--- a/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
++++ b/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
+@@ -9,18 +9,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ @OnlyIn(Dist.CLIENT)
+ public class ModHelloWorld extends ModDraggable {
+ 
+-    private ScreenPosition pos;
+-
+-    @Override
+-    public void save(ScreenPosition pos) {
+-        this.pos = pos;
+-    }
+-
+-    @Override
+-    public ScreenPosition load() {
+-        return pos;
+-    }
+-
+     @Override
+     public int getWidth() {
+         return font.getStringWidth("Hello world (Dummy)");
+-- 
+2.24.1.windows.2
+
