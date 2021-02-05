@@ -1,0 +1,815 @@
+From 6ac6cf3e1ef2c2570f1dd72777294962837dc885 Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Fri, 5 Feb 2021 13:21:43 +0100
+Subject: [PATCH 6/6] hud
+
+---
+ .../net/minecraft/client/GameSettings.java    |   3 +-
+ main/java/net/minecraft/client/Minecraft.java |   1 +
+ .../net/minecraft/client/gclient/GClient.java |  22 ++-
+ .../client/gclient/discord/DiscordRP.java     |   2 +-
+ .../minecraft/client/gclient/event/Event.java |   4 +-
+ .../client/gclient/event/EventCancelable.java |   2 +-
+ .../client/gclient/event/EventManager.java    |  41 +++--
+ .../client/gclient/event/EventPriority.java   |   2 +-
+ .../gclient/event/impl/RenderEvent.java       |  11 ++
+ .../client/gclient/hud/HUDConfigScreen.java   | 150 ++++++++++++++++++
+ .../client/gclient/hud/HUDManager.java        |  81 ++++++++++
+ .../client/gclient/hud/IRenderConfig.java     |  12 ++
+ .../client/gclient/hud/IRenderer.java         |  24 +++
+ .../client/gclient/hud/ScreenPosition.java    |  55 +++++++
+ .../net/minecraft/client/gclient/mod/Mod.java |  39 +++++
+ .../client/gclient/mod/ModDraggable.java      |  18 +++
+ .../client/gclient/mod/ModInstances.java      |  13 ++
+ .../gclient/mod/impl/ModHelloWorld.java       |  48 ++++++
+ .../client/renderer/GameRenderer.java         |   5 +
+ 19 files changed, 505 insertions(+), 28 deletions(-)
+ create mode 100644 main/java/net/minecraft/client/gclient/event/impl/RenderEvent.java
+ create mode 100644 main/java/net/minecraft/client/gclient/hud/HUDConfigScreen.java
+ create mode 100644 main/java/net/minecraft/client/gclient/hud/HUDManager.java
+ create mode 100644 main/java/net/minecraft/client/gclient/hud/IRenderConfig.java
+ create mode 100644 main/java/net/minecraft/client/gclient/hud/IRenderer.java
+ create mode 100644 main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/Mod.java
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/ModDraggable.java
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/ModInstances.java
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
+
+diff --git a/main/java/net/minecraft/client/GameSettings.java b/main/java/net/minecraft/client/GameSettings.java
+index 14da26f..8a8eb6f 100644
+--- a/main/java/net/minecraft/client/GameSettings.java
++++ b/main/java/net/minecraft/client/GameSettings.java
+@@ -167,7 +167,8 @@ public class GameSettings
+     public final KeyBinding[] keyBindsHotbar = new KeyBinding[] {new KeyBinding("key.hotbar.1", 49, "key.categories.inventory"), new KeyBinding("key.hotbar.2", 50, "key.categories.inventory"), new KeyBinding("key.hotbar.3", 51, "key.categories.inventory"), new KeyBinding("key.hotbar.4", 52, "key.categories.inventory"), new KeyBinding("key.hotbar.5", 53, "key.categories.inventory"), new KeyBinding("key.hotbar.6", 54, "key.categories.inventory"), new KeyBinding("key.hotbar.7", 55, "key.categories.inventory"), new KeyBinding("key.hotbar.8", 56, "key.categories.inventory"), new KeyBinding("key.hotbar.9", 57, "key.categories.inventory")};
+     public final KeyBinding keyBindSaveToolbar = new KeyBinding("key.saveToolbarActivator", 67, "key.categories.creative");
+     public final KeyBinding keyBindLoadToolbar = new KeyBinding("key.loadToolbarActivator", 88, "key.categories.creative");
+-    public KeyBinding[] keyBindings = ArrayUtils.addAll(new KeyBinding[] {this.keyBindAttack, this.keyBindUseItem, this.keyBindForward, this.keyBindLeft, this.keyBindBack, this.keyBindRight, this.keyBindJump, this.keyBindSneak, this.keyBindSprint, this.keyBindDrop, this.keyBindInventory, this.keyBindChat, this.keyBindPlayerList, this.keyBindPickBlock, this.keyBindCommand, this.keyBindScreenshot, this.keyBindTogglePerspective, this.keyBindSmoothCamera, this.keyBindFullscreen, this.keyBindSpectatorOutlines, this.keyBindSwapHands, this.keyBindSaveToolbar, this.keyBindLoadToolbar, this.keyBindAdvancements}, this.keyBindsHotbar);
++    public final KeyBinding keyBindHUDConfig = new KeyBinding("Configure HUD", 72, "key.categories.misc");
++    public KeyBinding[] keyBindings = ArrayUtils.addAll(new KeyBinding[] {this.keyBindAttack, this.keyBindUseItem, this.keyBindForward, this.keyBindLeft, this.keyBindBack, this.keyBindRight, this.keyBindJump, this.keyBindSneak, this.keyBindSprint, this.keyBindDrop, this.keyBindInventory, this.keyBindChat, this.keyBindPlayerList, this.keyBindPickBlock, this.keyBindCommand, this.keyBindScreenshot, this.keyBindTogglePerspective, this.keyBindSmoothCamera, this.keyBindFullscreen, this.keyBindSpectatorOutlines, this.keyBindSwapHands, this.keyBindSaveToolbar, this.keyBindLoadToolbar, this.keyBindAdvancements, this.keyBindHUDConfig}, this.keyBindsHotbar);
+     protected Minecraft mc;
+     private final File optionsFile;
+     public Difficulty difficulty = Difficulty.NORMAL;
+diff --git a/main/java/net/minecraft/client/Minecraft.java b/main/java/net/minecraft/client/Minecraft.java
+index c808b04..acb2e1f 100644
+--- a/main/java/net/minecraft/client/Minecraft.java
++++ b/main/java/net/minecraft/client/Minecraft.java
+@@ -518,6 +518,7 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+                 }
+             });
+         }, false));
++        GClient.getInstance().start();
+     }
+ 
+     public void func_230150_b_()
+diff --git a/main/java/net/minecraft/client/gclient/GClient.java b/main/java/net/minecraft/client/gclient/GClient.java
+index f94ed30..bf68eae 100644
+--- a/main/java/net/minecraft/client/gclient/GClient.java
++++ b/main/java/net/minecraft/client/gclient/GClient.java
+@@ -1,13 +1,20 @@
+ package net.minecraft.client.gclient;
+ 
++import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gclient.discord.DiscordRP;
++import net.minecraft.client.gclient.event.EventManager;
++import net.minecraft.client.gclient.event.EventTarget;
++import net.minecraft.client.gclient.event.impl.ClientTickEvent;
++import net.minecraft.client.gclient.hud.HUDManager;
++import net.minecraft.client.gclient.mod.ModInstances;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class GClient {
+     private static final GClient instance = new GClient();
+-    private DiscordRP discordRP = new DiscordRP();
++    private final DiscordRP discordRP = new DiscordRP();
++    private HUDManager hudManager;
+ 
+     public static final GClient getInstance() {
+         return instance;
+@@ -19,9 +26,22 @@ public class GClient {
+ 
+     public void init() {
+         discordRP.start();
++        EventManager.register(this);
++    }
++
++    public void start() {
++        hudManager = HUDManager.getInstance();
++        ModInstances.register(hudManager);
+     }
+ 
+     public void shutdown() {
+         discordRP.shutdown();
+     }
++
++    @EventTarget
++    public void onTick(ClientTickEvent e) {
++        if(Minecraft.getInstance().gameSettings.keyBindHUDConfig.isPressed()) {
++            hudManager.openConfigScreen();
++        }
++    }
+ }
+diff --git a/main/java/net/minecraft/client/gclient/discord/DiscordRP.java b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+index 5752405..4bef818 100644
+--- a/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
++++ b/main/java/net/minecraft/client/gclient/discord/DiscordRP.java
+@@ -14,9 +14,9 @@ import org.apache.logging.log4j.Logger;
+ @OnlyIn(Dist.CLIENT)
+ public class DiscordRP {
+     private static final Logger LOGGER = LogManager.getLogger();
++    private final String client_id = "806549146453409852";
+     private boolean running = true;
+     private long created = 0;
+-    private final String client_id = "806549146453409852";
+ 
+     public void start() {
+         this.created = System.currentTimeMillis();
+diff --git a/main/java/net/minecraft/client/gclient/event/Event.java b/main/java/net/minecraft/client/gclient/event/Event.java
+index dd0e510..f977c8a 100644
+--- a/main/java/net/minecraft/client/gclient/event/Event.java
++++ b/main/java/net/minecraft/client/gclient/event/Event.java
+@@ -10,8 +10,8 @@ public class Event {
+     public Event call() {
+         final ArrayList<EventData> dataList = EventManager.get(this.getClass());
+ 
+-        if(dataList != null) {
+-            for(EventData data: dataList) {
++        if (dataList != null) {
++            for (EventData data : dataList) {
+                 try {
+                     data.target.invoke(data.source, this);
+                 } catch (Exception e) {
+diff --git a/main/java/net/minecraft/client/gclient/event/EventCancelable.java b/main/java/net/minecraft/client/gclient/event/EventCancelable.java
+index b7bde15..8fcaa1f 100644
+--- a/main/java/net/minecraft/client/gclient/event/EventCancelable.java
++++ b/main/java/net/minecraft/client/gclient/event/EventCancelable.java
+@@ -4,7 +4,7 @@ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ 
+ @OnlyIn(Dist.CLIENT)
+-public class EventCancelable extends Event{
++public class EventCancelable extends Event {
+     private boolean canceled = false;
+ 
+     public boolean isCanceled() {
+diff --git a/main/java/net/minecraft/client/gclient/event/EventManager.java b/main/java/net/minecraft/client/gclient/event/EventManager.java
+index b88f12a..b56bdf1 100644
+--- a/main/java/net/minecraft/client/gclient/event/EventManager.java
++++ b/main/java/net/minecraft/client/gclient/event/EventManager.java
+@@ -19,9 +19,9 @@ public class EventManager {
+ 
+         final ArrayList<EventData> flexableArray = new ArrayList<EventData>();
+ 
+-        for(final byte b : EventPriority.VALUE_ARRAY) {
+-            for(EventData methodData : EventManager.REGISTRY_MAP.get(clazz)) {
+-                if(methodData.priority == b) {
++        for (final byte b : EventPriority.VALUE_ARRAY) {
++            for (EventData methodData : EventManager.REGISTRY_MAP.get(clazz)) {
++                if (methodData.priority == b) {
+                     flexableArray.add(methodData);
+                 }
+             }
+@@ -39,7 +39,7 @@ public class EventManager {
+         return isMethodBad(method) || method.getParameterTypes()[0].equals(clazz);
+     }
+ 
+-    public static ArrayList<EventData> get(final Class<? extends Event> clazz){
++    public static ArrayList<EventData> get(final Class<? extends Event> clazz) {
+         return REGISTRY_MAP.get(clazz);
+     }
+ 
+@@ -47,8 +47,8 @@ public class EventManager {
+ 
+         final Iterator<Map.Entry<Class<? extends Event>, ArrayList<EventData>>> iterator = EventManager.REGISTRY_MAP.entrySet().iterator();
+ 
+-        while(iterator.hasNext()) {
+-            if(!removeOnlyEmptyValues || iterator.next().getValue().isEmpty()) {
++        while (iterator.hasNext()) {
++            if (!removeOnlyEmptyValues || iterator.next().getValue().isEmpty()) {
+                 iterator.remove();
+             }
+         }
+@@ -56,9 +56,9 @@ public class EventManager {
+ 
+     public static void unregister(final Object o, final Class<? extends Event> clazz) {
+ 
+-        if(REGISTRY_MAP.containsKey(clazz)) {
+-            for(final EventData methodData : REGISTRY_MAP.get(clazz)) {
+-                if(methodData.source.equals(o)) {
++        if (REGISTRY_MAP.containsKey(clazz)) {
++            for (final EventData methodData : REGISTRY_MAP.get(clazz)) {
++                if (methodData.source.equals(o)) {
+                     REGISTRY_MAP.get(clazz).remove(methodData);
+                 }
+             }
+@@ -70,11 +70,11 @@ public class EventManager {
+ 
+     public static void unregister(final Object o) {
+ 
+-        for(ArrayList<EventData> flexableArray : REGISTRY_MAP.values()) {
++        for (ArrayList<EventData> flexableArray : REGISTRY_MAP.values()) {
+ 
+-            for(int i = flexableArray.size() -1; i >= 0; i--) {
++            for (int i = flexableArray.size() - 1; i >= 0; i--) {
+ 
+-                if(flexableArray.get(i).source.equals(o)) {
++                if (flexableArray.get(i).source.equals(o)) {
+                     flexableArray.remove(i);
+                 }
+ 
+@@ -92,19 +92,18 @@ public class EventManager {
+ 
+         final EventData methodData = new EventData(o, method, method.getAnnotation(EventTarget.class).value());
+ 
+-        if(!methodData.target.isAccessible()) {
++        if (!methodData.target.isAccessible()) {
+             methodData.target.setAccessible(true);
+         }
+ 
+-        if(REGISTRY_MAP.containsKey(clazz)) {
++        if (REGISTRY_MAP.containsKey(clazz)) {
+ 
+-            if(!REGISTRY_MAP.get(clazz).contains(methodData)) {
++            if (!REGISTRY_MAP.get(clazz).contains(methodData)) {
+                 REGISTRY_MAP.get(clazz).add(methodData);
+                 sortListValue((Class<? extends Event>) clazz);
+             }
+ 
+-        }
+-        else {
++        } else {
+             REGISTRY_MAP.put((Class<? extends Event>) clazz, new ArrayList<EventData>() {
+ 
+                 {
+@@ -118,8 +117,8 @@ public class EventManager {
+ 
+     public static void register(final Object o, final Class<? extends Event> clazz) {
+ 
+-        for(final Method method : o.getClass().getMethods()) {
+-            if(!isMethodBad(method, clazz)) {
++        for (final Method method : o.getClass().getMethods()) {
++            if (!isMethodBad(method, clazz)) {
+                 register(method, o);
+             }
+         }
+@@ -127,8 +126,8 @@ public class EventManager {
+     }
+ 
+     public static void register(Object o) {
+-        for(final Method method : o.getClass().getMethods()) {
+-            if(!isMethodBad(method)) {
++        for (final Method method : o.getClass().getMethods()) {
++            if (!isMethodBad(method)) {
+                 register(method, o);
+             }
+         }
+diff --git a/main/java/net/minecraft/client/gclient/event/EventPriority.java b/main/java/net/minecraft/client/gclient/event/EventPriority.java
+index 41b4a7b..5aa5e5c 100644
+--- a/main/java/net/minecraft/client/gclient/event/EventPriority.java
++++ b/main/java/net/minecraft/client/gclient/event/EventPriority.java
+@@ -7,5 +7,5 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ public class EventPriority {
+     public static final byte FIRST = 0, SECOND = 1, THIRD = 2, FOURTH = 3, FIFTH = 4;
+ 
+-    public static final byte[] VALUE_ARRAY = new byte[] {FIRST, SECOND, THIRD, FOURTH, FIFTH};
++    public static final byte[] VALUE_ARRAY = new byte[]{FIRST, SECOND, THIRD, FOURTH, FIFTH};
+ }
+diff --git a/main/java/net/minecraft/client/gclient/event/impl/RenderEvent.java b/main/java/net/minecraft/client/gclient/event/impl/RenderEvent.java
+new file mode 100644
+index 0000000..dc1813d
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/impl/RenderEvent.java
+@@ -0,0 +1,11 @@
++package net.minecraft.client.gclient.event.impl;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.gclient.event.Event;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class RenderEvent extends Event {
++    public MatrixStack matrixStack;
++}
+diff --git a/main/java/net/minecraft/client/gclient/hud/HUDConfigScreen.java b/main/java/net/minecraft/client/gclient/hud/HUDConfigScreen.java
+new file mode 100644
+index 0000000..9b2205f
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/hud/HUDConfigScreen.java
+@@ -0,0 +1,150 @@
++package net.minecraft.client.gclient.hud;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.gui.screen.Screen;
++import net.minecraft.util.text.TranslationTextComponent;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.Optional;
++import java.util.function.Predicate;
++
++@OnlyIn(Dist.CLIENT)
++public class HUDConfigScreen extends Screen {
++
++    private final HashMap<IRenderer, ScreenPosition> renderers = new HashMap<>();
++    private Optional<IRenderer> selectedRenderer = Optional.empty();
++    private int prevX, prevY;
++
++    protected HUDConfigScreen(HUDManager api) {
++        super(new TranslationTextComponent("options.title"));
++        Collection<IRenderer> registeredRenderers = api.getRegisteredRenderers();
++
++        for (IRenderer renderer : registeredRenderers) {
++            if (!renderer.isEnabled()) {
++                continue;
++            }
++
++            ScreenPosition pos = renderer.load();
++
++            if (pos == null) {
++                pos = ScreenPosition.fromRelativePosition(0.5, 0.5);
++            }
++
++            adjustBounds(renderer, pos);
++            this.renderers.put(renderer, pos);
++        }
++    }
++
++    @Override
++    public void render(MatrixStack matrixStack, int mouseX, int mouseY, float partialTicks) {
++        super.renderBackground(matrixStack);
++
++        this.drawHollowRect(matrixStack, 0, 0, this.width - 1, this.height - 1, 0xFFFF0000);
++
++        for (IRenderer renderer : renderers.keySet()) {
++            ScreenPosition pos = renderers.get(renderer);
++            renderer.renderDummy(matrixStack, pos);
++            this.drawHollowRect(matrixStack, pos.getAbsoluteX(), pos.getAbsoluteY(), renderer.getWidth(), renderer.getHeight(), 0xFF00FFFF);
++        }
++    }
++
++    private void drawHollowRect(MatrixStack matrixStack, int absoluteX, int absoluteY, int width, int height, int color) {
++        this.hLine(matrixStack, absoluteX, absoluteX + width, absoluteY, color);
++        this.hLine(matrixStack, absoluteX, absoluteX + width, absoluteY + height, color);
++
++        this.vLine(matrixStack, absoluteX, absoluteY + height, absoluteY, color);
++        this.vLine(matrixStack, absoluteX + width, absoluteY + height, absoluteY, color);
++    }
++
++    @Override
++    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
++        if (keyCode == 256) {
++            renderers.entrySet().forEach((entry) -> {
++                entry.getKey().save(entry.getValue());
++            });
++            Minecraft.getInstance().displayGuiScreen(null);
++        }
++        return false;
++    }
++
++    @Override
++    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
++        if (selectedRenderer.isPresent()) {
++            moveSelectedRendererBy((int) mouseX - prevX, (int) mouseY - prevY);
++        }
++
++        this.prevX = (int) mouseX;
++        this.prevY = (int) mouseY;
++
++        return false;
++    }
++
++    private void moveSelectedRendererBy(int x, int y) {
++        IRenderer renderer = selectedRenderer.get();
++        ScreenPosition pos = renderers.get(renderer);
++
++        pos.setAbsolute(pos.getAbsoluteX() + x, pos.getAbsoluteY() + y);
++
++        adjustBounds(renderer, pos);
++    }
++
++    private void adjustBounds(IRenderer renderer, ScreenPosition pos) {
++        int absoluteX = Math.max(0, Math.min(pos.getAbsoluteX(), Math.max(Minecraft.getInstance().getMainWindow().getScaledWidth() - renderer.getWidth(), 0)));
++        int absoluteY = Math.max(0, Math.min(pos.getAbsoluteY(), Math.max(Minecraft.getInstance().getMainWindow().getScaledHeight() - renderer.getHeight(), 0)));
++
++        pos.setAbsolute(absoluteX, absoluteY);
++    }
++
++    @Override
++    public void closeScreen() {
++        for (IRenderer renderer : renderers.keySet()) {
++            renderer.save(renderers.get(renderer));
++        }
++    }
++
++    @Override
++    public boolean isPauseScreen() {
++        return true;
++    }
++
++    @Override
++    public boolean mouseClicked(double mouseX, double mouseY, int button) {
++        this.prevX = (int) mouseX;
++        this.prevY = (int) mouseY;
++
++        loadMouseOver((int) mouseX, (int) mouseY);
++        return false;
++    }
++
++    private void loadMouseOver(int mouseX, int mouseY) {
++        this.selectedRenderer = renderers.keySet().stream().filter(new MouseOverFinder(mouseX, mouseY)).findFirst();
++    }
++
++    private class MouseOverFinder implements Predicate<IRenderer> {
++
++        private final int mouseX;
++        private final int mouseY;
++
++        public MouseOverFinder(int mouseX, int mouseY) {
++            this.mouseX = mouseX;
++            this.mouseY = mouseY;
++        }
++
++        @Override
++        public boolean test(IRenderer iRenderer) {
++            ScreenPosition position = renderers.get(iRenderer);
++
++            int absoluteX = position.getAbsoluteX();
++            int absoluteY = position.getAbsoluteY();
++
++            if (mouseX >= absoluteX && mouseX <= absoluteX + iRenderer.getWidth()) {
++                return mouseY >= absoluteY && mouseY <= absoluteY + iRenderer.getHeight();
++            }
++            return false;
++        }
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/hud/HUDManager.java b/main/java/net/minecraft/client/gclient/hud/HUDManager.java
+new file mode 100644
+index 0000000..bb5df18
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/hud/HUDManager.java
+@@ -0,0 +1,81 @@
++package net.minecraft.client.gclient.hud;
++
++import com.google.common.collect.Sets;
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.event.EventManager;
++import net.minecraft.client.gclient.event.EventTarget;
++import net.minecraft.client.gclient.event.impl.RenderEvent;
++import net.minecraft.client.gui.screen.ChatScreen;
++import net.minecraft.client.gui.screen.inventory.ContainerScreen;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.util.Collection;
++import java.util.Set;
++
++@OnlyIn(Dist.CLIENT)
++public class HUDManager {
++    private static HUDManager instance = null;
++    private final Set<IRenderer> registeredRenderers = Sets.newHashSet();
++    private final Minecraft mc = Minecraft.getInstance();
++
++    private HUDManager() {
++
++    }
++
++    public static HUDManager getInstance() {
++
++        if (instance != null) {
++            return instance;
++        }
++
++        instance = new HUDManager();
++        EventManager.register(instance);
++        return instance;
++    }
++
++    public void register(IRenderer... renderers) {
++        for (IRenderer renderer : renderers) {
++            this.registeredRenderers.add(renderer);
++        }
++    }
++
++    public void unregister(IRenderer... renderers) {
++        for (IRenderer renderer : renderers) {
++            this.registeredRenderers.remove(renderer);
++        }
++    }
++
++    public Collection<IRenderer> getRegisteredRenderers() {
++        return Sets.newHashSet(registeredRenderers);
++    }
++
++    public void openConfigScreen() {
++        mc.displayGuiScreen(new HUDConfigScreen(this));
++    }
++
++    @EventTarget
++    public void onRender(RenderEvent e) {
++        if (mc.currentScreen == null || mc.currentScreen instanceof ContainerScreen || mc.currentScreen instanceof ChatScreen) {
++            for (IRenderer renderer : registeredRenderers) {
++                callRenderer(e.matrixStack, renderer);
++            }
++        }
++    }
++
++    private void callRenderer(MatrixStack matrixStack, IRenderer renderer) {
++        if (!renderer.isEnabled()) {
++            return;
++        }
++
++        ScreenPosition pos = renderer.load();
++
++        if (pos == null) {
++            pos = ScreenPosition.fromRelativePosition(0.5, 0.5);
++        }
++
++        renderer.render(matrixStack, pos);
++    }
++
++}
+diff --git a/main/java/net/minecraft/client/gclient/hud/IRenderConfig.java b/main/java/net/minecraft/client/gclient/hud/IRenderConfig.java
+new file mode 100644
+index 0000000..3150685
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/hud/IRenderConfig.java
+@@ -0,0 +1,12 @@
++package net.minecraft.client.gclient.hud;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public interface IRenderConfig {
++
++    void save(ScreenPosition pos);
++
++    ScreenPosition load();
++}
+diff --git a/main/java/net/minecraft/client/gclient/hud/IRenderer.java b/main/java/net/minecraft/client/gclient/hud/IRenderer.java
+new file mode 100644
+index 0000000..ed47274
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/hud/IRenderer.java
+@@ -0,0 +1,24 @@
++package net.minecraft.client.gclient.hud;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public interface IRenderer extends IRenderConfig {
++
++    int getWidth();
++
++    int getHeight();
++
++    void render(MatrixStack matrixStack,ScreenPosition pos);
++
++    default void renderDummy(MatrixStack matrixStack, ScreenPosition pos) {
++        render(matrixStack, pos);
++    }
++
++    default boolean isEnabled() {
++        return true;
++    }
++
++}
+\ No newline at end of file
+diff --git a/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java b/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
+new file mode 100644
+index 0000000..215ce62
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/hud/ScreenPosition.java
+@@ -0,0 +1,55 @@
++package net.minecraft.client.gclient.hud;
++
++import net.minecraft.client.Minecraft;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ScreenPosition {
++
++    private static final Minecraft mc = Minecraft.getInstance();
++
++    private double x, y;
++
++    public ScreenPosition(double x, double y) {
++        setRelative(x, y);
++    }
++
++    public ScreenPosition(int x, int y) {
++        setAbsolute(x, y);
++    }
++
++    public static ScreenPosition fromRelativePosition(double x, double y) {
++        return new ScreenPosition(x, y);
++    }
++
++    public static ScreenPosition fromAbsolutePosition(int x, int y) {
++        return new ScreenPosition(x, y);
++    }
++
++    public int getAbsoluteX() {
++        return (int) (x * mc.getMainWindow().getScaledWidth());
++    }
++
++    public int getAbsoluteY() {
++        return (int) (y * mc.getMainWindow().getScaledHeight());
++    }
++
++    public double getRelativeX() {
++        return x;
++    }
++
++    public double getRelativeY() {
++        return y;
++    }
++
++    public void setAbsolute(int x, int y) {
++        this.x = (double) x / mc.getMainWindow().getScaledWidth();
++        this.y = (double) y / mc.getMainWindow().getScaledHeight();
++    }
++
++    public void setRelative(double x, double y) {
++        this.x = x;
++        this.y = y;
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/mod/Mod.java b/main/java/net/minecraft/client/gclient/mod/Mod.java
+new file mode 100644
+index 0000000..3fd5c2c
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/Mod.java
+@@ -0,0 +1,39 @@
++package net.minecraft.client.gclient.mod;
++
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.gclient.GClient;
++import net.minecraft.client.gclient.event.EventManager;
++import net.minecraft.client.gui.FontRenderer;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class Mod {
++
++    protected final Minecraft mc;
++    protected final FontRenderer font;
++    protected final GClient client;
++    private boolean isEnabled = true;
++
++    public Mod() {
++        this.mc = Minecraft.getInstance();
++        this.font = this.mc.fontRenderer;
++        this.client = GClient.getInstance();
++
++        setEnabled(isEnabled);
++    }
++
++    public boolean isEnabled() {
++        return isEnabled;
++    }
++
++    public void setEnabled(boolean enabled) {
++        isEnabled = enabled;
++
++        if (isEnabled) {
++            EventManager.register(this);
++        } else {
++            EventManager.unregister(this);
++        }
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/mod/ModDraggable.java b/main/java/net/minecraft/client/gclient/mod/ModDraggable.java
+new file mode 100644
+index 0000000..1473dd7
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/ModDraggable.java
+@@ -0,0 +1,18 @@
++package net.minecraft.client.gclient.mod;
++
++import net.minecraft.client.gclient.hud.IRenderer;
++import net.minecraft.client.gclient.hud.ScreenPosition;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public abstract class ModDraggable extends Mod implements IRenderer {
++
++    public final int getLineOffset(ScreenPosition pos, int lineNum) {
++        return pos.getAbsoluteY() + getLineOffset(lineNum);
++    }
++
++    private int getLineOffset(int lineNum) {
++        return (font.FONT_HEIGHT + 3) * lineNum;
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/mod/ModInstances.java b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+new file mode 100644
+index 0000000..727098b
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+@@ -0,0 +1,13 @@
++package net.minecraft.client.gclient.mod;
++
++import net.minecraft.client.gclient.hud.HUDManager;
++import net.minecraft.client.gclient.mod.impl.ModHelloWorld;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ModInstances {
++    public static void register(HUDManager api) {
++        api.register(new ModHelloWorld());
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java b/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
+new file mode 100644
+index 0000000..fbd6d1f
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/impl/ModHelloWorld.java
+@@ -0,0 +1,48 @@
++package net.minecraft.client.gclient.mod.impl;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.gclient.hud.ScreenPosition;
++import net.minecraft.client.gclient.mod.ModDraggable;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ModHelloWorld extends ModDraggable {
++
++    private ScreenPosition pos;
++
++    @Override
++    public void save(ScreenPosition pos) {
++        this.pos = pos;
++    }
++
++    @Override
++    public ScreenPosition load() {
++        return pos;
++    }
++
++    @Override
++    public int getWidth() {
++        return font.getStringWidth("Hello world (Dummy)");
++    }
++
++    @Override
++    public int getHeight() {
++        return font.FONT_HEIGHT;
++    }
++
++    @Override
++    public void render(MatrixStack matrixStack, ScreenPosition pos) {
++        font.drawString(matrixStack, "Hello world", pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1, 0xFF00FF00);
++    }
++
++    @Override
++    public void renderDummy(MatrixStack matrixStack, ScreenPosition pos) {
++        font.drawString(matrixStack, "Hello world (Dummy)", pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1, 0xFF00FF00);
++    }
++
++    @Override
++    public boolean isEnabled() {
++        return false;
++    }
++}
+diff --git a/main/java/net/minecraft/client/renderer/GameRenderer.java b/main/java/net/minecraft/client/renderer/GameRenderer.java
+index 1c4a219..edbde22 100644
+--- a/main/java/net/minecraft/client/renderer/GameRenderer.java
++++ b/main/java/net/minecraft/client/renderer/GameRenderer.java
+@@ -15,6 +15,7 @@ import net.minecraft.block.BlockState;
+ import net.minecraft.client.MainWindow;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
++import net.minecraft.client.gclient.event.impl.RenderEvent;
+ import net.minecraft.client.gui.MapItemRenderer;
+ import net.minecraft.client.gui.ResourceLoadProgressGui;
+ import net.minecraft.client.gui.screen.ChatScreen;
+@@ -788,6 +789,10 @@ public class GameRenderer implements IResourceManagerReloadListener, AutoCloseab
+             this.lightmapTexture.setAllowed(true);
+         }
+ 
++        RenderEvent e = new RenderEvent();
++        e.matrixStack = new MatrixStack();
++        e.call();
++
+         this.frameFinish();
+         this.waitForServerThread();
+         MemoryMonitor.update();
+-- 
+2.24.1.windows.2
+
