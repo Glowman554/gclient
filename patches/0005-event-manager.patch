@@ -1,0 +1,353 @@
+From 10a1f2d48b3d35fe00dbd97b9f74a53d35515106 Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Fri, 5 Feb 2021 08:18:07 +0100
+Subject: [PATCH 5/5] event manager
+
+---
+ main/java/net/minecraft/client/Minecraft.java |   3 +
+ .../minecraft/client/gclient/event/Event.java |  24 +++
+ .../client/gclient/event/EventCancelable.java |  17 +++
+ .../client/gclient/event/EventData.java       |  19 +++
+ .../client/gclient/event/EventManager.java    | 137 ++++++++++++++++++
+ .../client/gclient/event/EventPriority.java   |  11 ++
+ .../client/gclient/event/EventTarget.java     |  16 ++
+ .../gclient/event/impl/ClientTickEvent.java   |   6 +
+ .../client/gui/screen/MainMenuScreen.java     |  14 +-
+ 9 files changed, 240 insertions(+), 7 deletions(-)
+ create mode 100644 main/java/net/minecraft/client/gclient/event/Event.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/EventCancelable.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/EventData.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/EventManager.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/EventPriority.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/EventTarget.java
+ create mode 100644 main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java
+
+diff --git a/main/java/net/minecraft/client/Minecraft.java b/main/java/net/minecraft/client/Minecraft.java
+index 5f91ac8..c808b04 100644
+--- a/main/java/net/minecraft/client/Minecraft.java
++++ b/main/java/net/minecraft/client/Minecraft.java
+@@ -48,6 +48,7 @@ import net.minecraft.client.audio.MusicTicker;
+ import net.minecraft.client.audio.SoundHandler;
+ import net.minecraft.client.entity.player.ClientPlayerEntity;
+ import net.minecraft.client.gclient.GClient;
++import net.minecraft.client.gclient.event.impl.ClientTickEvent;
+ import net.minecraft.client.gui.DialogTexts;
+ import net.minecraft.client.gui.FontRenderer;
+ import net.minecraft.client.gui.IngameGui;
+@@ -1784,6 +1785,8 @@ public class Minecraft extends RecursiveEventLoop<Runnable> implements ISnooperI
+             this.networkManager.tick();
+         }
+ 
++        new ClientTickEvent().call();
++
+         this.profiler.endStartSection("keyboard");
+         this.keyboardListener.tick();
+         this.profiler.endSection();
+diff --git a/main/java/net/minecraft/client/gclient/event/Event.java b/main/java/net/minecraft/client/gclient/event/Event.java
+new file mode 100644
+index 0000000..dd0e510
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/Event.java
+@@ -0,0 +1,24 @@
++package net.minecraft.client.gclient.event;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.util.ArrayList;
++
++@OnlyIn(Dist.CLIENT)
++public class Event {
++    public Event call() {
++        final ArrayList<EventData> dataList = EventManager.get(this.getClass());
++
++        if(dataList != null) {
++            for(EventData data: dataList) {
++                try {
++                    data.target.invoke(data.source, this);
++                } catch (Exception e) {
++                    e.printStackTrace();
++                }
++            }
++        }
++        return this;
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/event/EventCancelable.java b/main/java/net/minecraft/client/gclient/event/EventCancelable.java
+new file mode 100644
+index 0000000..b7bde15
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/EventCancelable.java
+@@ -0,0 +1,17 @@
++package net.minecraft.client.gclient.event;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class EventCancelable extends Event{
++    private boolean canceled = false;
++
++    public boolean isCanceled() {
++        return canceled;
++    }
++
++    public void setCanceled(boolean canceled) {
++        this.canceled = canceled;
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/event/EventData.java b/main/java/net/minecraft/client/gclient/event/EventData.java
+new file mode 100644
+index 0000000..044d21e
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/EventData.java
+@@ -0,0 +1,19 @@
++package net.minecraft.client.gclient.event;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.lang.reflect.Method;
++
++@OnlyIn(Dist.CLIENT)
++public class EventData {
++    public final Object source;
++    public final Method target;
++    public final byte priority;
++
++    public EventData(Object source, Method target, byte priority) {
++        this.source = source;
++        this.target = target;
++        this.priority = priority;
++    }
++}
+diff --git a/main/java/net/minecraft/client/gclient/event/EventManager.java b/main/java/net/minecraft/client/gclient/event/EventManager.java
+new file mode 100644
+index 0000000..b88f12a
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/EventManager.java
+@@ -0,0 +1,137 @@
++package net.minecraft.client.gclient.event;
++
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.lang.reflect.Method;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.Map;
++
++@OnlyIn(Dist.CLIENT)
++public class EventManager {
++
++    private static final Map<Class<? extends Event>, ArrayList<EventData>> REGISTRY_MAP = new HashMap<Class<? extends Event>, ArrayList<EventData>>();
++
++    private static void sortListValue(final Class<? extends Event> clazz) {
++
++        final ArrayList<EventData> flexableArray = new ArrayList<EventData>();
++
++        for(final byte b : EventPriority.VALUE_ARRAY) {
++            for(EventData methodData : EventManager.REGISTRY_MAP.get(clazz)) {
++                if(methodData.priority == b) {
++                    flexableArray.add(methodData);
++                }
++            }
++        }
++
++        EventManager.REGISTRY_MAP.put(clazz, flexableArray);
++
++    }
++
++    private static boolean isMethodBad(final Method method) {
++        return method.getParameterTypes().length != 1 || !method.isAnnotationPresent(EventTarget.class);
++    }
++
++    private static boolean isMethodBad(final Method method, final Class<? extends Event> clazz) {
++        return isMethodBad(method) || method.getParameterTypes()[0].equals(clazz);
++    }
++
++    public static ArrayList<EventData> get(final Class<? extends Event> clazz){
++        return REGISTRY_MAP.get(clazz);
++    }
++
++    public static void cleanMap(final boolean removeOnlyEmptyValues) {
++
++        final Iterator<Map.Entry<Class<? extends Event>, ArrayList<EventData>>> iterator = EventManager.REGISTRY_MAP.entrySet().iterator();
++
++        while(iterator.hasNext()) {
++            if(!removeOnlyEmptyValues || iterator.next().getValue().isEmpty()) {
++                iterator.remove();
++            }
++        }
++    }
++
++    public static void unregister(final Object o, final Class<? extends Event> clazz) {
++
++        if(REGISTRY_MAP.containsKey(clazz)) {
++            for(final EventData methodData : REGISTRY_MAP.get(clazz)) {
++                if(methodData.source.equals(o)) {
++                    REGISTRY_MAP.get(clazz).remove(methodData);
++                }
++            }
++        }
++
++        cleanMap(true);
++
++    }
++
++    public static void unregister(final Object o) {
++
++        for(ArrayList<EventData> flexableArray : REGISTRY_MAP.values()) {
++
++            for(int i = flexableArray.size() -1; i >= 0; i--) {
++
++                if(flexableArray.get(i).source.equals(o)) {
++                    flexableArray.remove(i);
++                }
++
++            }
++
++        }
++
++        cleanMap(true);
++
++    }
++
++    public static void register(final Method method, final Object o) {
++
++        final Class<?> clazz = method.getParameterTypes()[0];
++
++        final EventData methodData = new EventData(o, method, method.getAnnotation(EventTarget.class).value());
++
++        if(!methodData.target.isAccessible()) {
++            methodData.target.setAccessible(true);
++        }
++
++        if(REGISTRY_MAP.containsKey(clazz)) {
++
++            if(!REGISTRY_MAP.get(clazz).contains(methodData)) {
++                REGISTRY_MAP.get(clazz).add(methodData);
++                sortListValue((Class<? extends Event>) clazz);
++            }
++
++        }
++        else {
++            REGISTRY_MAP.put((Class<? extends Event>) clazz, new ArrayList<EventData>() {
++
++                {
++                    this.add(methodData);
++                }
++
++            });
++        }
++
++    }
++
++    public static void register(final Object o, final Class<? extends Event> clazz) {
++
++        for(final Method method : o.getClass().getMethods()) {
++            if(!isMethodBad(method, clazz)) {
++                register(method, o);
++            }
++        }
++
++    }
++
++    public static void register(Object o) {
++        for(final Method method : o.getClass().getMethods()) {
++            if(!isMethodBad(method)) {
++                register(method, o);
++            }
++        }
++    }
++
++}
+\ No newline at end of file
+diff --git a/main/java/net/minecraft/client/gclient/event/EventPriority.java b/main/java/net/minecraft/client/gclient/event/EventPriority.java
+new file mode 100644
+index 0000000..41b4a7b
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/EventPriority.java
+@@ -0,0 +1,11 @@
++package net.minecraft.client.gclient.event;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class EventPriority {
++    public static final byte FIRST = 0, SECOND = 1, THIRD = 2, FOURTH = 3, FIFTH = 4;
++
++    public static final byte[] VALUE_ARRAY = new byte[] {FIRST, SECOND, THIRD, FOURTH, FIFTH};
++}
+diff --git a/main/java/net/minecraft/client/gclient/event/EventTarget.java b/main/java/net/minecraft/client/gclient/event/EventTarget.java
+new file mode 100644
+index 0000000..f7c0404
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/EventTarget.java
+@@ -0,0 +1,16 @@
++package net.minecraft.client.gclient.event;
++
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++import java.lang.annotation.ElementType;
++import java.lang.annotation.Retention;
++import java.lang.annotation.RetentionPolicy;
++import java.lang.annotation.Target;
++
++@OnlyIn(Dist.CLIENT)
++@Target(ElementType.METHOD)
++@Retention(RetentionPolicy.RUNTIME)
++public @interface EventTarget {
++    byte value() default EventPriority.THIRD;
++}
+diff --git a/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java b/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java
+new file mode 100644
+index 0000000..d17dacf
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java
+@@ -0,0 +1,6 @@
++package net.minecraft.client.gclient.event.impl;
++
++import net.minecraft.client.gclient.event.Event;
++
++public class ClientTickEvent extends Event {
++}
+diff --git a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+index 3584bec..a988eb2 100644
+--- a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
++++ b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
+@@ -4,13 +4,6 @@ import com.google.common.util.concurrent.Runnables;
+ import com.mojang.blaze3d.matrix.MatrixStack;
+ import com.mojang.blaze3d.platform.GlStateManager;
+ import com.mojang.blaze3d.systems.RenderSystem;
+-import java.io.IOException;
+-import java.util.Random;
+-import java.util.concurrent.CompletableFuture;
+-import java.util.concurrent.Executor;
+-import java.util.function.BiConsumer;
+-import javax.annotation.Nullable;
+-
+ import net.minecraft.client.gclient.GClient;
+ import net.minecraft.client.gui.AccessibilityScreen;
+ import net.minecraft.client.gui.DialogTexts;
+@@ -38,6 +31,13 @@ import net.optifine.reflect.ReflectorForge;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
++import javax.annotation.Nullable;
++import java.io.IOException;
++import java.util.Random;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.Executor;
++import java.util.function.BiConsumer;
++
+ public class MainMenuScreen extends Screen
+ {
+     private static final Logger field_238656_b_ = LogManager.getLogger();
+-- 
+2.24.1.windows.2
+
