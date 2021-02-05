@@ -12,5 +12,8 @@ git am < ..\patches\0004-discord-rp.patch
 git am < ..\patches\0005-event-manager.patch
 git am < ..\patches\0006-hud.patch
 git am < ..\patches\0007-filemanager.patch
+git am < ..\patches\0008-armor-status-mod.patch
+git am < ..\patches\0009-fps-diplay-mod.patch
+git am < ..\patches\0010-position-mod.patch
 
 cd ..

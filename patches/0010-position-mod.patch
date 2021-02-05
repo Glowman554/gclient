@@ -1,0 +1,71 @@
+From 910fdaa591f8fb83942a8ba15d3cf5ea09d2627f Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Fri, 5 Feb 2021 16:07:34 +0100
+Subject: [PATCH 10/10] position  mod
+
+---
+ .../client/gclient/mod/ModInstances.java      |  2 ++
+ .../gclient/mod/impl/ModPositionDisplay.java  | 32 +++++++++++++++++++
+ 2 files changed, 34 insertions(+)
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/impl/ModPositionDisplay.java
+
+diff --git a/main/java/net/minecraft/client/gclient/mod/ModInstances.java b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+index e9994cb..195e3b4 100644
+--- a/main/java/net/minecraft/client/gclient/mod/ModInstances.java
++++ b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+@@ -4,6 +4,7 @@ import net.minecraft.client.gclient.hud.HUDManager;
+ import net.minecraft.client.gclient.mod.impl.ModArmorStatus;
+ import net.minecraft.client.gclient.mod.impl.ModFpsDisplay;
+ import net.minecraft.client.gclient.mod.impl.ModHelloWorld;
++import net.minecraft.client.gclient.mod.impl.ModPositionDisplay;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ 
+@@ -13,5 +14,6 @@ public class ModInstances {
+         api.register(new ModHelloWorld());
+         api.register(new ModArmorStatus());
+         api.register(new ModFpsDisplay());
++        api.register(new ModPositionDisplay());
+     }
+ }
+diff --git a/main/java/net/minecraft/client/gclient/mod/impl/ModPositionDisplay.java b/main/java/net/minecraft/client/gclient/mod/impl/ModPositionDisplay.java
+new file mode 100644
+index 0000000..44e074c
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/impl/ModPositionDisplay.java
+@@ -0,0 +1,32 @@
++package net.minecraft.client.gclient.mod.impl;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.gclient.hud.ScreenPosition;
++import net.minecraft.client.gclient.mod.ModDraggable;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class ModPositionDisplay extends ModDraggable {
++    @Override
++    public int getWidth() {
++        return font.getStringWidth("Facing: east");
++    }
++
++    @Override
++    public int getHeight() {
++        return font.FONT_HEIGHT * 2;
++    }
++
++    @Override
++    public void render(MatrixStack matrixStack, ScreenPosition pos) {
++        font.drawString(matrixStack, String.format("XYZ: %d, %d, %d", (int) mc.player.prevPosX, (int) mc.player.prevPosY, (int) mc.player.prevPosZ), pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1, -1);
++        font.drawString(matrixStack, "Facing: " + mc.player.getHorizontalFacing(), pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1 + font.FONT_HEIGHT, -1);
++    }
++
++    @Override
++    public void renderDummy(MatrixStack matrixStack, ScreenPosition pos) {
++        font.drawString(matrixStack, "XYZ: 0, 0, 0", pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1, -1);
++        font.drawString(matrixStack, "Facing: east", pos.getAbsoluteX() + 1, pos.getAbsoluteY() + 1 + font.FONT_HEIGHT, -1);
++    }
++}
+-- 
+2.24.1.windows.2
+

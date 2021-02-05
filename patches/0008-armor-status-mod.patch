@@ -1,0 +1,98 @@
+From a5ebc6c7b51aa4d81e82675fe0787340a0c162b4 Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Fri, 5 Feb 2021 15:07:12 +0100
+Subject: [PATCH 08/10] armor status mod
+
+---
+ .../client/gclient/mod/ModInstances.java      |  2 +
+ .../gclient/mod/impl/ModArmorStatus.java      | 59 +++++++++++++++++++
+ 2 files changed, 61 insertions(+)
+ create mode 100644 main/java/net/minecraft/client/gclient/mod/impl/ModArmorStatus.java
+
+diff --git a/main/java/net/minecraft/client/gclient/mod/ModInstances.java b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+index 727098b..5879df0 100644
+--- a/main/java/net/minecraft/client/gclient/mod/ModInstances.java
++++ b/main/java/net/minecraft/client/gclient/mod/ModInstances.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.client.gclient.mod;
+ 
+ import net.minecraft.client.gclient.hud.HUDManager;
++import net.minecraft.client.gclient.mod.impl.ModArmorStatus;
+ import net.minecraft.client.gclient.mod.impl.ModHelloWorld;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+@@ -9,5 +10,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
+ public class ModInstances {
+     public static void register(HUDManager api) {
+         api.register(new ModHelloWorld());
++        api.register(new ModArmorStatus());
+     }
+ }
+diff --git a/main/java/net/minecraft/client/gclient/mod/impl/ModArmorStatus.java b/main/java/net/minecraft/client/gclient/mod/impl/ModArmorStatus.java
+new file mode 100644
+index 0000000..fdbeff8
+--- /dev/null
++++ b/main/java/net/minecraft/client/gclient/mod/impl/ModArmorStatus.java
+@@ -0,0 +1,59 @@
++package net.minecraft.client.gclient.mod.impl;
++
++import com.mojang.blaze3d.matrix.MatrixStack;
++import net.minecraft.client.gclient.hud.ScreenPosition;
++import net.minecraft.client.gclient.mod.ModDraggable;
++import net.minecraft.client.renderer.RenderHelper;
++import net.minecraft.item.ItemStack;
++import net.minecraft.item.Items;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++import org.lwjgl.opengl.GL11;
++
++
++@OnlyIn(Dist.CLIENT)
++public class ModArmorStatus extends ModDraggable {
++    @Override
++    public int getWidth() {
++        return 64;
++    }
++
++    @Override
++    public int getHeight() {
++        return 64;
++    }
++
++    @Override
++    public void render(MatrixStack matrixStack, ScreenPosition pos) {
++        for(int i = 0; i < mc.player.inventory.armorInventory.toArray().length; i++) {
++            ItemStack itemStack = mc.player.inventory.armorInventory.get(i);
++            renderItemStack(matrixStack, pos, i, itemStack);
++        }
++    }
++
++    @Override
++    public void renderDummy(MatrixStack matrixStack, ScreenPosition pos) {
++        renderItemStack(matrixStack, pos, 3, new ItemStack(Items.DIAMOND_HELMET));
++        renderItemStack(matrixStack, pos, 2, new ItemStack(Items.DIAMOND_CHESTPLATE));
++        renderItemStack(matrixStack, pos, 1, new ItemStack(Items.DIAMOND_LEGGINGS));
++        renderItemStack(matrixStack, pos, 0, new ItemStack(Items.DIAMOND_BOOTS));
++    }
++
++    private void renderItemStack(MatrixStack matrixStack, ScreenPosition pos, int i, ItemStack itemStack) {
++        if(itemStack == null) {
++            return;
++        }
++
++        GL11.glPushMatrix();
++        int yAdd = (-16 * i) + 48;
++
++        if(itemStack.getItem().isDamageable()) {
++            double damage = ((itemStack.getMaxDamage() - itemStack.getDamage()) / (double) itemStack.getMaxDamage()) * 100;
++            font.drawString(matrixStack, String.format("%.2f%%", damage), pos.getAbsoluteX() + 20, pos.getAbsoluteY() + yAdd + 5, -1);
++        }
++
++        RenderHelper.enableStandardItemLighting();
++        mc.getItemRenderer().renderItemAndEffectIntoGUI(itemStack, pos.getAbsoluteX(), pos.getAbsoluteY() + yAdd);
++        GL11.glPopMatrix();
++    }
++}
+-- 
+2.24.1.windows.2
+
