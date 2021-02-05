@@ -1,6 +1,6 @@
-From 10a1f2d48b3d35fe00dbd97b9f74a53d35515106 Mon Sep 17 00:00:00 2001
+From 7fc6b39ef6e67e6e4fc55cd92cfcffd5db9ba315 Mon Sep 17 00:00:00 2001
 From: janick voss <vossjanick@gmail.com>
-Date: Fri, 5 Feb 2021 08:18:07 +0100
+Date: Fri, 5 Feb 2021 08:23:33 +0100
 Subject: [PATCH 5/5] event manager
 
 ---
@@ -11,9 +11,9 @@ Subject: [PATCH 5/5] event manager
  .../client/gclient/event/EventManager.java    | 137 ++++++++++++++++++
  .../client/gclient/event/EventPriority.java   |  11 ++
  .../client/gclient/event/EventTarget.java     |  16 ++
- .../gclient/event/impl/ClientTickEvent.java   |   6 +
+ .../gclient/event/impl/ClientTickEvent.java   |   9 ++
  .../client/gui/screen/MainMenuScreen.java     |  14 +-
- 9 files changed, 240 insertions(+), 7 deletions(-)
+ 9 files changed, 243 insertions(+), 7 deletions(-)
  create mode 100644 main/java/net/minecraft/client/gclient/event/Event.java
  create mode 100644 main/java/net/minecraft/client/gclient/event/EventCancelable.java
  create mode 100644 main/java/net/minecraft/client/gclient/event/EventData.java
@@ -306,14 +306,17 @@ index 0000000..f7c0404
 +}
 diff --git a/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java b/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java
 new file mode 100644
-index 0000000..d17dacf
+index 0000000..d1384e5
 --- /dev/null
 +++ b/main/java/net/minecraft/client/gclient/event/impl/ClientTickEvent.java
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,9 @@
 +package net.minecraft.client.gclient.event.impl;
 +
 +import net.minecraft.client.gclient.event.Event;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
 +
++@OnlyIn(Dist.CLIENT)
 +public class ClientTickEvent extends Event {
 +}
 diff --git a/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java b/main/java/net/minecraft/client/gui/screen/MainMenuScreen.java
