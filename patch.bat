@@ -15,5 +15,6 @@ git am < ..\patches\0007-filemanager.patch
 git am < ..\patches\0008-armor-status-mod.patch
 git am < ..\patches\0009-fps-diplay-mod.patch
 git am < ..\patches\0010-position-mod.patch
+git am < ..\patches\0011-fox-cape.patch
 
 cd ..

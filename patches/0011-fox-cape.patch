@@ -1,0 +1,42 @@
+From ef09c8c37f15e4b32f25d121a2e312b4dbfe1cca Mon Sep 17 00:00:00 2001
+From: janick voss <vossjanick@gmail.com>
+Date: Tue, 9 Feb 2021 20:00:37 +0100
+Subject: [PATCH 11/11] fox cape
+
+---
+ main/java/net/optifine/player/CapeUtils.java      |   1 +
+ .../assets/minecraft/gclient/fox-cape.png         | Bin 0 -> 377 bytes
+ 2 files changed, 1 insertion(+)
+ create mode 100644 main/resources/assets/minecraft/gclient/fox-cape.png
+
+diff --git a/main/java/net/optifine/player/CapeUtils.java b/main/java/net/optifine/player/CapeUtils.java
+index 1da30ec..c143e9f 100644
+--- a/main/java/net/optifine/player/CapeUtils.java
++++ b/main/java/net/optifine/player/CapeUtils.java
+@@ -20,6 +20,7 @@ public class CapeUtils
+     public static void downloadCape(AbstractClientPlayerEntity player)
+     {
+         String s = player.getNameClear();
++        player.setLocationOfCape(new ResourceLocation("gclient/fox-cape.png"));
+ 
+         if (s != null && !s.isEmpty() && !s.contains("\u0000") && PATTERN_USERNAME.matcher(s).matches())
+         {
+diff --git a/main/resources/assets/minecraft/gclient/fox-cape.png b/main/resources/assets/minecraft/gclient/fox-cape.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..37fcb713c1327a917111efa4806ebf83f82fddf9
+GIT binary patch
+literal 377
+zcmeAS@N?(olHy`uVBq!ia0vp^4nVBH!VDw>HYaZfQY`6?zK#qG8~eHcB(j1elRbib
+z85pY67#JE_7#My5g&JNkFq9fFFuY1&V6d9Oz#v{QXIG#NP(m@lC&U#<1Hu3Q|F`rv
+zpUG5sRHL{dP>GF&?|HxD^P87{e)&>kt#b^hg0UpXFPOpM*^M+1C&}C0g(;1@CI!f0
+zFY)wsWq-mbB&xxuR=Io`P{_m6#WBR<baH}73nL@j8V3Q!6QK)KIGid(G`P8>9)>=U
+zl9F<o*)-)sfcYM-E~TieAGHc*#=UF`KX@i|by|>EfV1O44GB*M2FLp%ZTDwCJODIP
+zwZt`|BqgyV)hf9t6-Y4{85kMp8W`#tT7(!GTA3JF8JcJt7+4t?%;x{mh@v4kKP5A*
+W61Rp|K@PS+4Gf;HelF{r5}E*6du>es
+
+literal 0
+HcmV?d00001
+
+-- 
+2.24.1.windows.2
+
